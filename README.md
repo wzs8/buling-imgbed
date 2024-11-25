@@ -133,6 +133,20 @@ npm run dev
 npm run deploy
 ```
 
+## 环境变量
+| 变量 | 是否必要 | 默认值 | 备注 |
+| ---- | ----- | ----- | ---- |
+| CF_ACCOUNT_ID | 是 | | |
+| CF_API_TOKEN  | 是 | | |
+| JWT_SECRET    | 是 | | |
+| TG_BOT_TOKEN  | 否 | | |
+| CF_D1_DATABASE | 否 | buling-imgbed-d1 | |
+| CF_R2_BUCKET | 否 | buling-imgbed-r2 | |
+| CF_LOCATION | 否 | apac | |
+
+*说明：`CF_R2_BUCKET`:存储桶名称只能包含字母数字和 - 字符。*
+
+
 ## 🔧 技术架构
 
 ```

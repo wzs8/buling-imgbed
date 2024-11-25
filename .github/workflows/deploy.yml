@@ -31,13 +31,14 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
         run: |
-          echo "Checking existing D1 databases..."
-          wrangler d1 list &>/dev/null || echo "Failed to list databases"
+          DATABASE_NAME=${{ secrets.CF_D1_DATABASE || 'buling-imgbed-d1' }}
+          LOCATION=${{ secrets.CF_LOCATION || 'apac' }}
           
-          DATABASE_INFO=$(wrangler d1 list 2>/dev/null | grep "buling-imgbed-d1" || echo "")
+          echo "Checking existing D1 databases..."
+          DATABASE_INFO=$(wrangler d1 list 2>/dev/null | grep "$DATABASE_NAME" || echo "")
           if [ -z "$DATABASE_INFO" ]; then
             echo "Creating D1 database..."
-            CREATE_OUTPUT=$(wrangler d1 create buling-imgbed-d1 2>/dev/null)
+            CREATE_OUTPUT=$(wrangler d1 create "$DATABASE_NAME" --location="$LOCATION" 2>/dev/null)
             
             DATABASE_ID=$(echo "$CREATE_OUTPUT" | grep "database_id" | grep -o '[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}')
             if [ -z "$DATABASE_ID" ]; then
@@ -50,7 +51,7 @@ jobs:
             
             if [ -f "./db.sql" ]; then
               echo "Initializing database..."
-              wrangler d1 execute buling-imgbed-d1 --file=./db.sql --remote &>/dev/null || {
+              wrangler d1 execute "$DATABASE_NAME" --file=./db.sql --remote &>/dev/null || {
                 echo "Failed to initialize database"
                 exit 1
               }
@@ -61,7 +62,7 @@ jobs:
             fi
           else
             echo "Using existing D1 database"
-            DATABASE_ID=$(wrangler d1 list 2>/dev/null | grep "buling-imgbed-d1" | grep -o '[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}')
+            DATABASE_ID=$(wrangler d1 list 2>/dev/null | grep "$DATABASE_NAME" | grep -o '[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}')
             sed -i "s/database_id = \"xxxx\"/database_id = \"$DATABASE_ID\"/" wrangler.toml
           fi
 
@@ -70,21 +71,33 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
         run: |
-          # 检查并创建 R2 存储桶. 默认创建到(--location=apac)亚太地区。
-          # --location= wnam北美西部 / enam北美东部 / weur西欧 /eeur东欧 。根据需要自行修改
-          BUCKET_INFO=$(wrangler r2 bucket list | grep "buling-imgbed-r2" || echo "")
+          BUCKET_NAME=${{ secrets.CF_R2_BUCKET || 'buling-imgbed-r2' }}
+          LOCATION=${{ secrets.CF_LOCATION || 'apac' }}
+          
+          echo "Checking existing R2 buckets..."
+          BUCKET_INFO=$(wrangler r2 bucket list | grep "$BUCKET_NAME" || echo "")
           if [ -z "$BUCKET_INFO" ]; then
             echo "Creating R2 bucket..."
-            wrangler r2 bucket create buling-imgbed-r2 --location=apac
+            wrangler r2 bucket create "$BUCKET_NAME" --location="$LOCATION"
+            echo "R2 bucket created successfully"
           else
-            echo "R2 bucket already exists"
+            echo "Using existing R2 bucket"
           fi
       
-      - name: 5.Update wrangler.toml with secrets
+      - name: 5.Update wrangler.toml with secrets and actual values
         run: |
+          # 更新 JWT_SECRET 和 TG_BOT_TOKEN
           sed -i "s/JWT_SECRET = \".*\"/JWT_SECRET = \"${{ secrets.JWT_SECRET }}\"/" wrangler.toml
           sed -i "s/TG_BOT_TOKEN = \".*\"/TG_BOT_TOKEN = \"${{ secrets.TG_BOT_TOKEN }}\"/" wrangler.toml
-          echo "Configuration updated successfully"
+
+          # 设置默认值
+          DATABASE_NAME=${{ secrets.CF_D1_DATABASE || 'buling-imgbed-d1' }}
+          BUCKET_NAME=${{ secrets.CF_R2_BUCKET || 'buling-imgbed-r2' }}
+
+          # 更新 wrangler.toml
+          sed -i "s/database_name = \".*\"/database_name = \"$DATABASE_NAME\"/" wrangler.toml
+          sed -i "s/bucket_name = \".*\"/bucket_name = \"$BUCKET_NAME\"/" wrangler.toml
+          echo "Updated wrangler.toml with secrets and actual values"
 
       - name: 6.Deploy to Cloudflare Workers
         env:
@@ -97,3 +110,4 @@ jobs:
             exit 1
           }
           echo "✅ 部署成功"
+
